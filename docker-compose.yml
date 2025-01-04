@@ -1,0 +1,23 @@
+version: '3'
+services:
+  db:
+    image: postgres:13-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - "pg-data:/var/lib/postgresql/data"
+    environment:
+      - POSTGRES_DB=one_edu_app
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+
+  redis:
+    image: redis:6.2.5
+    volumes:
+      - "redis-data:/data"
+    ports:
+      - "6379:6379"
+
+volumes:
+  pg-data: {}
+  redis-data: {}
