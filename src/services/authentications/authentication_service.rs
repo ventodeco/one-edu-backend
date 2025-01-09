@@ -20,12 +20,15 @@ use crate::commons::authentication::auth_keys_service::{Claims, REFRESH_TOKEN_LA
 use crate::commons::repositories::base::Repository;
 use crate::commons::repositories::users::user_model::NewUser;
 use crate::commons::repositories::users::user_repository::UserRepository;
+use crate::services::redis::redis_helper::RedisHelper;
+use crate::services::redis::redis_service::RedisService;
 use super::authentication_dto::{GenericError, GenericResponse, LoginRequest, RegisterRequest, RegisterResponse};
 
 pub async fn register_user<
     T: UserRepository + Repository,
-    U: Authenticator
-    >(app_data: Data<AppState<T, U>>, register_request: Json<RegisterRequest>) -> Result<GenericResponse, GenericResponse>
+    U: Authenticator,
+    V: RedisService
+    >(app_data: Data<AppState<T, U, V>>, register_request: Json<RegisterRequest>) -> Result<GenericResponse, GenericResponse>
 {
 
     let result = app_data.repo.register_user(
@@ -68,9 +71,18 @@ pub async fn register_user<
 
 pub async fn login_user<
     T: UserRepository + Repository,
-    U: Authenticator
-    >(app_data: Data<AppState<T, U>>, login_request: Json<LoginRequest>)
-    -> HttpResponse {
+    U: Authenticator,
+    V: RedisHelper + RedisService
+    >(app_data: Data<AppState<T, U, V>>, login_request: Json<LoginRequest>)
+      -> HttpResponse {
+
+    let redis_key = "test".to_string();
+    let redis_value = "uhuy".to_string();
+    let val = app_data.redis_service.set(redis_key.clone(), redis_value).await;
+    let val_set = app_data.redis_service.get(redis_key).await;
+
+    println!("val {:?}", val);
+    println!("val_set {:?}", val_set);
 
     let auth_result = app_data.repo.login(login_request.email.clone(), login_request.password.clone()).await;
 
@@ -91,8 +103,8 @@ pub async fn login_user<
     }
 }
 
-fn get_refresh_and_access_token_response<'a, T: Repository, U: Authenticator>(
-    app_data: Data<AppState<T, U>>, user_name: &'a str
+fn get_refresh_and_access_token_response<'a, T: Repository, U: Authenticator, V: RedisService>(
+    app_data: Data<AppState<T, U, V>>, user_name: &'a str
 ) -> (Cookie<'a>, String) {
     let access_token = get_token(user_name.to_string(), &app_data.auth_keys.encoding_key, Some(STANDARD_ACCESS_TOKEN_EXPIRATION));
     let refresh_token = get_token(user_name.to_string(), &app_data.auth_keys.encoding_key, None);

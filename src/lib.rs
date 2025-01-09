@@ -17,7 +17,12 @@ pub mod services {
         pub mod authentication_dto;
         pub mod authentication_service;
     }
+    pub mod redis {
+        pub mod redis_service;
+        pub mod redis_helper;
+    }
 }
+
 
 use std::env;
 use actix_cors::Cors;
@@ -29,6 +34,7 @@ use crate::app_state::AppState;
 use crate::commons::authentication::auth_keys_service::{init_auth_keys, AuthService};
 use crate::commons::repositories::base::{DbRepo, Repository};
 use crate::services::authentications::authentication_service::{login_user, register_user};
+use crate::services::redis::redis_service::{RedisService, RedisSvc};
 
 pub async fn run() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -39,10 +45,11 @@ pub async fn run() -> std::io::Result<()> {
     let port = env::var("PORT").unwrap().parse::<u16>().unwrap();
     // let allowed_domain = env::var("ALLOWED_DOMAIN").unwrap();
 
-    let app_data = actix_web::web::Data::new(AppState {
+    let app_data = web::Data::new(AppState {
         repo: DbRepo::init().await,
         auth_service: AuthService,
-        auth_keys: init_auth_keys().await
+        auth_keys: init_auth_keys().await,
+        redis_service: RedisSvc::init().await
     });
 
     HttpServer::new(move || {
@@ -67,11 +74,11 @@ pub async fn run() -> std::io::Result<()> {
                         web::scope("/users")
                             .service(
                                 web::resource("/register")
-                                    .route(web::post().to(register_user::<DbRepo, AuthService>))
+                                    .route(web::post().to(register_user::<DbRepo, AuthService, RedisSvc>))
                             )
                             .service(
                                 web::resource("/login")
-                                    .route(web::post().to(login_user::<DbRepo, AuthService>))
+                                    .route(web::post().to(login_user::<DbRepo, AuthService, RedisSvc>))
                             )
                     )
             )
