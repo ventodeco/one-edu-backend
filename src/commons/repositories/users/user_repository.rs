@@ -57,7 +57,7 @@ impl UserRepository for DbRepo {
     async fn login(&self, email: String, password: String) -> Result<UserLoginResponse, Error> {
         let result = query_as::<_, UserLoginResponse>(
             r"
-            select user_name, email, password
+            select id, user_name, email, password
             from users
             where email = $1
             ")

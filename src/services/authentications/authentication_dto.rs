@@ -48,6 +48,12 @@ pub struct RegisterRequest {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LoginResponse {
+    pub access_token: String
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterResponse {
     pub id: String
 }
@@ -62,16 +68,16 @@ pub struct GenericError {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GenericResponse {
+pub struct GenericResponse<T> {
     pub success: bool,
-    pub data: Option<RegisterResponse>,
+    pub data: Option<T>,
     pub error: Option<GenericError>
 }
 
-impl Responder for GenericResponse {
+impl<T: Serialize> Responder for GenericResponse<T> {
     type Body = BoxBody;
 
-    fn respond_to(self, _: &actix_web::HttpRequest) -> actix_web::HttpResponse<Self::Body> {
+    fn respond_to(self, _: &actix_web::HttpRequest) -> HttpResponse<Self::Body> {
         let json_result = serde_json::to_string(&self);
 
         match json_result {
@@ -85,19 +91,19 @@ impl Responder for GenericResponse {
     }
 }
 
-impl Debug for GenericResponse {
+impl<T> Debug for GenericResponse<T> {
     fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 
-impl Display for GenericResponse {
+impl<T> Display for GenericResponse<T> {
     fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 
-impl ResponseError for GenericResponse {
+impl<T: Serialize> ResponseError for GenericResponse<T> {
     fn error_response(&self) -> HttpResponse {
         HttpResponse::InternalServerError().json(self)
     }

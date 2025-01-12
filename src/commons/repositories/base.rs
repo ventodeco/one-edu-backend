@@ -17,6 +17,7 @@ pub struct EntityId {
 
 #[derive(FromRow, Clone, Debug)]
 pub struct UserLoginResponse {
+    pub id: i64,
     pub user_name: String,
     pub email: String,
     pub password: String,

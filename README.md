@@ -1,16 +1,28 @@
 # One Edu Backend
 
 
-## Tech Stack
+# Tech Stack
 - Rust (1.81.0)
 - Actix Web
 - SQLX
 - PostgreSQL
 - Redis
 
-## Setup
+# Setup
 
-# Run Docker Compose
+## Run Docker Compose
 ```
 docker-compose up -d
+```
+
+## Run Migration
+```
+sqlx migrate run
+```
+
+# Cheat Sheet
+
+## Create New Table
+```
+sqlx migrate add -r <migration name>
 ```

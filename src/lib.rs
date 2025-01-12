@@ -9,6 +9,10 @@ pub mod commons {
             pub mod user_model;
             pub mod user_repository;
         }
+        pub mod user_questions {
+            pub mod user_question_model;
+            pub mod user_question_repository;
+        }
     }
 }
 pub mod app_state;
@@ -21,6 +25,10 @@ pub mod services {
         pub mod redis_service;
         pub mod redis_helper;
     }
+    pub mod user_questions {
+        pub mod user_question_dto;
+        pub mod user_question_service;
+    }
 }
 
 
@@ -30,11 +38,13 @@ use actix_web::{web, App, HttpServer};
 use actix_web::http::header;
 use actix_web::middleware::Logger;
 use dotenv::dotenv;
+use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::commons::authentication::auth_keys_service::{init_auth_keys, AuthService};
 use crate::commons::repositories::base::{DbRepo, Repository};
 use crate::services::authentications::authentication_service::{login_user, register_user};
 use crate::services::redis::redis_service::{RedisService, RedisSvc};
+use crate::services::user_questions::user_question_service::{get_exam_summary, start_exam};
 
 pub async fn run() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -79,6 +89,17 @@ pub async fn run() -> std::io::Result<()> {
                             .service(
                                 web::resource("/login")
                                     .route(web::post().to(login_user::<DbRepo, AuthService, RedisSvc>))
+                            )
+                    )
+                    .service(
+                        web::scope("/exams")
+                            .service(
+                                web::resource("/{uuid}/summary")
+                                    .route(web::get().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| get_exam_summary(data, request, path.into_inner())))
+                            )
+                            .service(
+                                web::resource("/{uuid}")
+                                    .route(web::get().to(|path: web::Path<Uuid>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| start_exam(data, path.into_inner())))
                             )
                     )
             )

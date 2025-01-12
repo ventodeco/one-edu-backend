@@ -1,8 +1,8 @@
-use chrono::{Utc, Duration};
+use chrono::{Utc};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use ring::signature::{Ed25519KeyPair, KeyPair};
 use serde::{Deserialize, Serialize};
-use jsonwebtoken::{ Validation, encode, decode, Algorithm };
+use jsonwebtoken::{ Validation, decode, Algorithm };
 use async_trait::async_trait;
 use derive_more::{Error, Display};
 use log::info;
@@ -14,8 +14,8 @@ pub const REFRESH_TOKEN_LABEL: &str = "refresh_token";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
-    pub exp: usize
-    // pub role: RepoDeveloperOrEmployer
+    pub exp: usize,
+    pub user_id: i64,
 }
 
 #[derive(Error, Display, Debug)]
@@ -41,22 +41,6 @@ pub async fn init_auth_keys() -> AuthKeys {
     AuthKeys { encoding_key, decoding_key }
 }
 
-pub fn get_token(
-    user_name: String,
-    // dev_or_emp: RepoDeveloperOrEmployer,
-    encoding_key: &EncodingKey,
-    exp_duration_seconds: Option<i64>) -> String {
-    let duration = if let None = exp_duration_seconds {
-        STANDARD_REFRESH_TOKEN_EXPIRATION
-    } else {
-        exp_duration_seconds.unwrap()
-    };
-    let claims = Claims { sub: user_name, exp: (Utc::now() + Duration::seconds(duration)).timestamp() as usize };
-    let token = encode(&jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA), &claims, encoding_key).unwrap();
-
-    token
-}
-
 pub fn decode_token(token: &str, decoding_key: &DecodingKey) -> Claims {
     let validation = Validation::new(Algorithm::EdDSA);
     let token_data = decode::<Claims>(token, decoding_key, &validation).unwrap();
@@ -70,28 +54,48 @@ pub struct AuthService;
 pub trait Authenticator {
     /// Checks headers for Authorization and Bearer token
     /// @headers is a tuple: 0 is header name and 1 is header value
-    async fn is_authenticated(&self, user_name: String, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<bool, AuthenticationError>;
+    async fn is_authenticated(&self, user_id: i64, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<bool, AuthenticationError>;
+    async fn get_user_id(&self, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<i64, AuthenticationError>;
 }
 
 /// Check that user has already logged in and received their access token
 #[async_trait]
 impl Authenticator for AuthService {    
-    async fn is_authenticated(&self, user_name: String, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<bool, AuthenticationError> {
+    async fn is_authenticated(&self, user_id: i64, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<bool, AuthenticationError> {
         let mut result: Result<bool, AuthenticationError> = Err(AuthenticationError::AuthenticationFailure);
 
         _ = headers.iter().for_each(|header| {
             let header_name = header.0;
             let header_val = header.1;
-            
+
             if header_name.to_lowercase() == "authorization" {
                 let bearer_items: Vec<&str> = header_val.split(' ').collect();
-                let claims = decode_token(bearer_items.get(1).unwrap(), decoding_key);
-                info!("checking against user_name {}", user_name);
-                if claims.sub == user_name {
+                let claims = decode_token(bearer_items.get(1).
+                    unwrap(), decoding_key);
+                info!("checking against user_id {}", user_id);
+                if claims.user_id == user_id {
                     if claims.exp >= (Utc::now().timestamp() as usize) {
                         result = Ok(true);
                     }
-                }    
+                }
+            }
+        });
+
+        result
+    }
+
+    async fn get_user_id(&self, headers: Vec<(&str, &str)>, decoding_key: &DecodingKey) -> Result<i64, AuthenticationError> {
+        let mut result: Result<i64, AuthenticationError> = Err(AuthenticationError::AuthenticationFailure);
+
+        _ = headers.iter().for_each(|header| {
+            let header_name = header.0;
+            let header_val = header.1;
+
+            if header_name.to_lowercase() == "authorization" {
+                let bearer_items: Vec<&str> = header_val.split(' ').collect();
+                let claims = decode_token(bearer_items.get(1).
+                    unwrap(), decoding_key);
+                result = Ok(claims.user_id);
             }
         });
 
