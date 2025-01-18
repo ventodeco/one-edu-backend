@@ -1,7 +1,9 @@
+use std::error::Error;
 use serde::{Deserialize, Serialize};
-use sqlx::{Decode, FromRow, Postgres, Type};
+use sqlx::{Decode, Encode, FromRow, Postgres, Type};
+use sqlx::encode::IsNull;
 use sqlx::error::BoxDynError;
-use sqlx::postgres::{PgTypeInfo, PgValueRef};
+use sqlx::postgres::{PgArgumentBuffer, PgTypeInfo, PgValueRef};
 use uuid::Uuid;
 
 #[derive(FromRow, Serialize)]
@@ -19,9 +21,12 @@ pub struct UserQuestion {
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionDetails {
+    // pub uuid: Uuid,
+    pub answered_questions: Option<i32>,
+    pub answered_question_list: Option<Vec<i32>>,
     pub total_questions: i32,
     pub title: String,
     pub description: Option<String>,
@@ -31,7 +36,7 @@ pub struct QuestionDetails {
     pub questions: Vec<Question>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
     pub number: i32,
@@ -41,9 +46,10 @@ pub struct Question {
     pub reference: Option<String>,
     pub answer_list: Vec<Answer>,
     pub correct_answer: String,
+    pub answered: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Answer {
     pub key: String,
@@ -57,6 +63,18 @@ impl<'r> Decode<'r, Postgres> for QuestionDetails {
         serde_json::from_str(cleaned_value_str).map_err(|e| {
             format!("Failed to decode QuestionDetails from JSON: {}. JSON: {}", e, cleaned_value_str).into()
         })
+    }
+}
+
+impl<'r> Encode<'r, Postgres> for QuestionDetails {
+    fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> Result<IsNull, Box<dyn Error + Send + Sync>> {
+        match serde_json::to_string(self) {
+            Ok(json) => {
+                buf.extend_from_slice(json.as_bytes());
+                Ok(IsNull::No)
+            }
+            Err(e) => Err(Box::new(e)),
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize};
 use uuid::Uuid;
 use crate::commons::repositories::user_questions::user_question_model::UserQuestion;
 

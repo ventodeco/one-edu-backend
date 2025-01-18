@@ -44,7 +44,7 @@ use crate::commons::authentication::auth_keys_service::{init_auth_keys, AuthServ
 use crate::commons::repositories::base::{DbRepo, Repository};
 use crate::services::authentications::authentication_service::{login_user, register_user};
 use crate::services::redis::redis_service::{RedisService, RedisSvc};
-use crate::services::user_questions::user_question_service::{get_exam_summary, start_exam};
+use crate::services::user_questions::user_question_service::{get_exam_summary, get_exam, start_exam};
 
 pub async fn run() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -98,8 +98,12 @@ pub async fn run() -> std::io::Result<()> {
                                     .route(web::get().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| get_exam_summary(data, request, path.into_inner())))
                             )
                             .service(
+                                web::resource("/{uuid}/start")
+                                    .route(web::post().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| start_exam(data, request, path.into_inner())))
+                            )
+                            .service(
                                 web::resource("/{uuid}")
-                                    .route(web::get().to(|path: web::Path<Uuid>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| start_exam(data, path.into_inner())))
+                                    .route(web::get().to(|path: web::Path<Uuid>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| get_exam(data, path.into_inner())))
                             )
                     )
             )
