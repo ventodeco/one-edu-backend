@@ -14,6 +14,10 @@ pub mod commons {
             pub mod user_question_repository;
         }
     }
+    pub mod instrumentation {
+        pub mod statsd_config;
+        pub mod statsd_helper;
+    }
 }
 pub mod app_state;
 pub mod services {
@@ -41,10 +45,12 @@ use dotenv::dotenv;
 use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::commons::authentication::auth_keys_service::{init_auth_keys, AuthService};
+use crate::commons::instrumentation::statsd_config::{StatsdService, StatsdSvc};
 use crate::commons::repositories::base::{DbRepo, Repository};
 use crate::services::authentications::authentication_service::{login_user, register_user};
 use crate::services::redis::redis_service::{RedisService, RedisSvc};
-use crate::services::user_questions::user_question_service::{get_exam_summary, get_exam, start_exam};
+use crate::services::user_questions::user_question_dto::AnswerQuestionRequest;
+use crate::services::user_questions::user_question_service::{get_exam_summary, get_exam, start_exam, answer_question};
 
 pub async fn run() -> std::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
@@ -59,7 +65,8 @@ pub async fn run() -> std::io::Result<()> {
         repo: DbRepo::init().await,
         auth_service: AuthService,
         auth_keys: init_auth_keys().await,
-        redis_service: RedisSvc::init().await
+        redis_service: RedisSvc::init().await,
+        statsd_service: StatsdSvc::init().await,
     });
 
     HttpServer::new(move || {
@@ -84,26 +91,30 @@ pub async fn run() -> std::io::Result<()> {
                         web::scope("/users")
                             .service(
                                 web::resource("/register")
-                                    .route(web::post().to(register_user::<DbRepo, AuthService, RedisSvc>))
+                                    .route(web::post().to(register_user::<DbRepo, AuthService, RedisSvc, StatsdSvc>))
                             )
                             .service(
                                 web::resource("/login")
-                                    .route(web::post().to(login_user::<DbRepo, AuthService, RedisSvc>))
+                                    .route(web::post().to(login_user::<DbRepo, AuthService, RedisSvc, StatsdSvc>))
                             )
                     )
                     .service(
                         web::scope("/exams")
                             .service(
                                 web::resource("/{uuid}/summary")
-                                    .route(web::get().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| get_exam_summary(data, request, path.into_inner())))
+                                    .route(web::get().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc, StatsdSvc>>| get_exam_summary(data, request, path.into_inner())))
                             )
                             .service(
                                 web::resource("/{uuid}/start")
-                                    .route(web::post().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| start_exam(data, request, path.into_inner())))
+                                    .route(web::post().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, data: web::Data<AppState<DbRepo, AuthService, RedisSvc, StatsdSvc>>| start_exam(data, request, path.into_inner())))
+                            )
+                            .service(
+                                web::resource("/{uuid}/answer")
+                                    .route(web::post().to(|path: web::Path<Uuid>, request: actix_web::HttpRequest, request_body: web::Json<AnswerQuestionRequest>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc, StatsdSvc>>| answer_question(data, request, request_body, path.into_inner())))
                             )
                             .service(
                                 web::resource("/{uuid}")
-                                    .route(web::get().to(|path: web::Path<Uuid>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc>>| get_exam(data, path.into_inner())))
+                                    .route(web::get().to(|path: web::Path<Uuid>, data: web::Data<AppState<DbRepo, AuthService, RedisSvc, StatsdSvc>>| get_exam(data, path.into_inner())))
                             )
                     )
             )

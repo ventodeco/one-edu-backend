@@ -1,24 +1,28 @@
 use std::ops::Add;
+use actix_web::web;
 use actix_web::web::Data;
 use chrono::Utc;
-use log::{debug, info};
+use log::info;
 use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::commons::authentication::auth_keys_service::Authenticator;
+use crate::commons::instrumentation::statsd_config::StatsdService;
+use crate::commons::instrumentation::statsd_helper::StatsdHelper;
 use crate::commons::repositories::base::Repository;
 use crate::commons::repositories::user_questions::user_question_model::{QuestionDetails, UserQuestion};
 use crate::commons::repositories::user_questions::user_question_repository::UserQuestionRepository;
 use crate::services::authentications::authentication_dto::{GenericError, GenericResponse};
 use crate::services::redis::redis_helper::RedisHelper;
 use crate::services::redis::redis_service::RedisService;
-use crate::services::user_questions::user_question_dto::{GetExamSummaryData};
+use crate::services::user_questions::user_question_dto::{AnswerQuestionRequest, GetExamSummaryData};
 
 pub async fn get_exam_summary<
     T: UserQuestionRepository + Repository,
     U: Authenticator,
-    V: RedisService
+    V: RedisService,
+    W: StatsdService
 >(
-    app_data: Data<AppState<T, U, V>>, req: actix_web::HttpRequest, uuid: Uuid) -> Result<GenericResponse<GetExamSummaryData>, GenericResponse<()>> {
+    app_data: Data<AppState<T, U, V, W>>, req: actix_web::HttpRequest, uuid: Uuid) -> Result<GenericResponse<GetExamSummaryData>, GenericResponse<()>> {
 
     log_mdc::insert("request_id", uuid.to_string());
     info!("GetExamSummary | Start getting exam summary");
@@ -60,9 +64,10 @@ pub async fn get_exam_summary<
 pub async fn start_exam<
     T: UserQuestionRepository + Repository,
     U: Authenticator,
-    V: RedisHelper + RedisService
+    V: RedisHelper + RedisService,
+    W: StatsdService
 >(
-    app_data: Data<AppState<T, U, V>>, req: actix_web::HttpRequest, uuid: Uuid) -> Result<GenericResponse<QuestionDetails>, GenericResponse<()>> {
+    app_data: Data<AppState<T, U, V, W>>, req: actix_web::HttpRequest, uuid: Uuid) -> Result<GenericResponse<QuestionDetails>, GenericResponse<()>> {
 
     log_mdc::insert("request_id", uuid.to_string());
     info!("StartExam | Start the exam");
@@ -135,11 +140,43 @@ pub async fn start_exam<
     })
 }
 
+pub async fn answer_question<
+    T: UserQuestionRepository + Repository,
+    U: Authenticator,
+    V: RedisHelper + RedisService,
+    W: StatsdHelper + StatsdService
+>(
+    app_data: Data<AppState<T, U, V, W>>, req: actix_web::HttpRequest, request_body: web::Json<AnswerQuestionRequest>, uuid: Uuid) -> Result<GenericResponse<QuestionDetails>, GenericResponse<()>> {
+
+    app_data.statsd_service.increment("answer_question").await;
+
+    log_mdc::insert("request_id", uuid.to_string());
+    info!("StartExam | Answer Questions");
+    info!("StartExam | Request body {:?}", request_body);
+    info!("StartExam | req {:?}", req);
+
+    // check the validation
+
+    // check if in the user_id is same
+
+    // check if the exam is started
+
+    // handle the save
+
+    // return true/false
+
+    Ok(GenericResponse {
+        success: true,
+        data: None,
+        error: None
+    })
+}
+
 fn construct_exam_key(uuid: Uuid) -> String {
     format!("exam:{}", uuid)
 }
 
-async fn check_authentication<T: UserQuestionRepository + Repository, U: Authenticator, V: RedisService>(app_data: &Data<AppState<T, U, V>>, headers: Vec<(&str, &str)>) -> Result<i64, GenericResponse<()>> {
+async fn check_authentication<T: UserQuestionRepository + Repository, U: Authenticator, V: RedisService, W: StatsdService>(app_data: &Data<AppState<T, U, V, W>>, headers: Vec<(&str, &str)>) -> Result<i64, GenericResponse<()>> {
     match app_data.auth_service.get_user_id(headers, &app_data.auth_keys.decoding_key).await {
         Ok(user_id) => {
             if user_id == 0 {
@@ -172,9 +209,10 @@ async fn check_authentication<T: UserQuestionRepository + Repository, U: Authent
 pub async fn get_exam<
     T: UserQuestionRepository + Repository,
     U: Authenticator,
-    V: RedisService
+    V: RedisService,
+    W: StatsdService
 >(
-    app_data: Data<AppState<T, U, V>>, uuid: Uuid) -> Result<GenericResponse<UserQuestion>, GenericResponse<()>> {
+    app_data: Data<AppState<T, U, V, W>>, uuid: Uuid) -> Result<GenericResponse<UserQuestion>, GenericResponse<()>> {
 
     app_data.repo.get_user_question_by_uuid(uuid).await.map(|data| {
         GenericResponse {

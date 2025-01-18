@@ -1,4 +1,4 @@
-use serde::{Serialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::commons::repositories::user_questions::user_question_model::UserQuestion;
 
@@ -16,4 +16,11 @@ pub struct GetExamSummaryData {
     pub description: String,
     pub total_questions: i32,
     pub time_limit: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AnswerQuestionRequest {
+    pub question_id: i32,
+    pub answer: String,
 }

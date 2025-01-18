@@ -15,6 +15,7 @@ use crate::{
     }, 
 };
 use crate::commons::authentication::auth_keys_service::{Claims, REFRESH_TOKEN_LABEL, STANDARD_ACCESS_TOKEN_EXPIRATION, STANDARD_REFRESH_TOKEN_EXPIRATION};
+use crate::commons::instrumentation::statsd_config::StatsdService;
 use crate::commons::repositories::base::Repository;
 use crate::commons::repositories::users::user_model::NewUser;
 use crate::commons::repositories::users::user_repository::UserRepository;
@@ -25,8 +26,9 @@ use super::authentication_dto::{GenericError, GenericResponse, LoginRequest, Log
 pub async fn register_user<
     T: UserRepository + Repository,
     U: Authenticator,
-    V: RedisService
-    >(app_data: Data<AppState<T, U, V>>, register_request: Json<RegisterRequest>) -> Result<GenericResponse<RegisterResponse>, GenericResponse<RegisterResponse>>
+    V: RedisService,
+    W: StatsdService
+    >(app_data: Data<AppState<T, U, V, W>>, register_request: Json<RegisterRequest>) -> Result<GenericResponse<RegisterResponse>, GenericResponse<RegisterResponse>>
 {
 
     let result = app_data.repo.register_user(
@@ -70,8 +72,9 @@ pub async fn register_user<
 pub async fn login_user<
     T: UserRepository + Repository,
     U: Authenticator,
-    V: RedisHelper + RedisService
-    >(app_data: Data<AppState<T, U, V>>, login_request: Json<LoginRequest>)
+    V: RedisHelper + RedisService,
+    W: StatsdService
+    >(app_data: Data<AppState<T, U, V, W>>, login_request: Json<LoginRequest>)
       -> Result<GenericResponse<LoginResponse>, GenericResponse<LoginResponse>> {
 
     let redis_key = "test".to_string();
@@ -117,8 +120,8 @@ pub async fn login_user<
     }
 }
 
-fn get_refresh_and_access_token_response<'a, T: Repository, U: Authenticator, V: RedisService>(
-    app_data: Data<AppState<T, U, V>>, user_name: &'a str, user_id: i64
+fn get_refresh_and_access_token_response<'a, T: Repository, U: Authenticator, V: RedisService, W: StatsdService>(
+    app_data: Data<AppState<T, U, V, W>>, user_name: &'a str, user_id: i64
 ) -> (Cookie<'a>, String) {
     let access_token = get_token(user_name.to_string(), &app_data.auth_keys.encoding_key, Some(STANDARD_ACCESS_TOKEN_EXPIRATION), user_id);
     let refresh_token = get_token(user_name.to_string(), &app_data.auth_keys.encoding_key, None, user_id);
