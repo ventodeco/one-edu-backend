@@ -1,4 +1,4 @@
-CREATE TABLE user_questions
+CREATE TABLE IF NOT EXISTS user_questions
 (
     uuid             UUID        PRIMARY KEY,
     user_id          BIGINT      NOT NULL,

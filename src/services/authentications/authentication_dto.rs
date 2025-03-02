@@ -32,8 +32,9 @@ pub struct RouteResetPassword {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginRequest {
-    pub email: String,
-    pub password: String
+    pub user_identifier: String,
+    pub password: String,
+    pub partner: String,
 }
 
 #[derive(Deserialize)]
@@ -43,7 +44,8 @@ pub struct RegisterRequest {
     pub full_name: String,
     pub email: String,
     pub phone_number: String,
-    pub password: String
+    pub password: String,
+    pub partner: String,
 }
 
 #[derive(Serialize)]

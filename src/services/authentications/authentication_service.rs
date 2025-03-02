@@ -4,8 +4,10 @@ use actix_web::{
 use actix_web::cookie::Cookie;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Validation};
-use log::error;
+use log::{error, info};
 use uuid::Uuid;
+use regex::Regex;
+use sqlx::Error;
 use crate::{
     app_state::AppState, 
     commons::{
@@ -31,6 +33,86 @@ pub async fn register_user<
     >(app_data: Data<AppState<T, U, V, W>>, register_request: Json<RegisterRequest>) -> Result<GenericResponse<RegisterResponse>, GenericResponse<RegisterResponse>>
 {
 
+    let user_exist = app_data.repo.check_user_existence(register_request.user_name.clone(), register_request.email.clone(), register_request.phone_number.clone(), register_request.partner.clone()).await;
+
+    match user_exist {
+        Ok(exist) if exist => {
+            let email_exist = app_data.repo.check_user_by_email(register_request.email.clone(), register_request.partner.clone()).await;
+
+            match email_exist {
+                Ok(exists) if exists => {
+                    return Ok(
+                        GenericResponse {
+                            success: false,
+                            data: None,
+                            error: Option::from(GenericError {
+                                code: 1007,
+                                entity: "ONE_EDU_BACKEND".to_string(),
+                                message: "EMAIL_ALREADY_REGISTERED".to_string()
+                            }),
+                        }
+                    )
+                },
+                Ok(_) => {},
+                Err(_) => {}
+            }
+
+            let phone_exist = app_data.repo.check_user_by_phone_number(register_request.phone_number.clone(), register_request.partner.clone()).await;
+
+            match phone_exist {
+                Ok(exists) if exists => {
+                    return Ok(
+                        GenericResponse {
+                            success: false,
+                            data: None,
+                            error: Option::from(GenericError {
+                                code: 1005,
+                                entity: "ONE_EDU_BACKEND".to_string(),
+                                message: "PHONE_NUMBER_ALREADY_REGISTERED".to_string()
+                            }),
+                        }
+                    )
+                },
+                Ok(_) => {},
+                Err(_) => {}
+            }
+
+            let username_exist = app_data.repo.check_user_by_username(register_request.user_name.clone(), register_request.partner.clone()).await;
+
+            match username_exist {
+                Ok(exists) if exists => {
+                    return Ok(
+                        GenericResponse {
+                            success: false,
+                            data: None,
+                            error: Option::from(GenericError {
+                                code: 1006,
+                                entity: "ONE_EDU_BACKEND".to_string(),
+                                message: "USER_NAME_ALREADY_REGISTERED".to_string()
+                            }),
+                        }
+                    )
+                },
+                Ok(_) => {},
+                Err(_) => {}
+            }
+
+            return Ok(
+                GenericResponse {
+                    success: false,
+                    data: None,
+                    error: Option::from(GenericError {
+                        code: 500,
+                        entity: "ONE_EDU_BACKEND".to_string(),
+                        message: "SERVER_ERROR".to_string()
+                    }),
+                }
+            )
+        },
+        Ok(_) => {},
+        Err(_) => {}
+    }
+
     let result = app_data.repo.register_user(
         NewUser {
             uuid: Uuid::now_v7(),
@@ -38,6 +120,7 @@ pub async fn register_user<
             full_name: register_request.full_name.clone(),
             email: register_request.email.clone(),
             phone_number: register_request.phone_number.clone(),
+            partner: register_request.partner.clone(),
             // university: register_request.university.clone(),
             // major: register_request.major.clone(),
             role: "USER".to_string(),
@@ -61,7 +144,7 @@ pub async fn register_user<
                 data: None,
                 error: Option::from(GenericError {
                     code: 500,
-                    entity: "testing".to_string(),
+                    entity: "ONE_EDU_BACKEND".to_string(),
                     message: e.to_string()
                 }),
             }
@@ -77,15 +160,19 @@ pub async fn login_user<
     >(app_data: Data<AppState<T, U, V, W>>, login_request: Json<LoginRequest>)
       -> Result<GenericResponse<LoginResponse>, GenericResponse<LoginResponse>> {
 
-    let redis_key = "test".to_string();
-    let redis_value = "uhuy".to_string();
-    let val = app_data.redis_service.set(redis_key.clone(), redis_value).await;
-    let val_set = app_data.redis_service.get(redis_key).await;
+    let email_regex = Regex::new(r"^[\w\.-]+@[\w\.-]+\.\w+$").unwrap();
+    let phone_regex = Regex::new(r"^081\d+$").unwrap();
 
-    println!("val {:?}", val);
-    println!("val_set {:?}", val_set);
-
-    let auth_result = app_data.repo.login(login_request.email.clone(), login_request.password.clone()).await;
+    let auth_result = if email_regex.is_match(&login_request.user_identifier) {
+        info!("Logging in via email {} and partner {}", login_request.user_identifier, login_request.partner);
+        app_data.repo.login_via_email(login_request.user_identifier.clone(), login_request.password.clone(), login_request.partner.clone()).await
+    } else if phone_regex.is_match(&login_request.user_identifier) {
+        info!("Logging in via phone number {} and partner {}", login_request.user_identifier, login_request.partner);
+        app_data.repo.login_via_phone_number(login_request.user_identifier.clone(), login_request.password.clone(), login_request.partner.clone()).await
+    } else {
+        info!("Logging in via username {} and partner {}", login_request.user_identifier, login_request.partner);
+        app_data.repo.login_via_user_name(login_request.user_identifier.clone(), login_request.password.clone(), login_request.partner.clone()).await
+    };
 
     match auth_result {
         Ok(_) => {
